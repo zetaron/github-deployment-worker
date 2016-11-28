@@ -72,7 +72,7 @@ then
     . "$(pwd)/hooks/github/environment_url"
 fi
 
-create_status "pending" "${LOG_URL}" "Deployment finished successfully." ""
+create_status "pending" "${LOG_URL}" "Deployment in progress." ""
 
 docker wait "${COMPOSE_PROJECT_NAME}_deploy"
 exit_status=$?
