@@ -50,6 +50,11 @@ cd "${REPO_OWNER_LOGIN}-${REPO_NAME}-${SHORT_SHA}"
 export DEPLOYMENT_TASK=$(jq '.deployment.task')
 export DEPLOYMENT_PAYLOAD=$(jq '.deployment.payload')
 
+if [ -f "$(pwd)/hooks/pre_deploy" ]
+then
+    . "$(pwd)/hooks/pre_deploy"
+fi
+
 if [ -f "$(pwd)/hooks/github/pre_deploy" ]
 then
     . "$(pwd)/hooks/github/pre_deploy"
@@ -86,6 +91,11 @@ fi
 if [ -f "$(pwd)/hooks/github/post_deploy" ]
 then
     . "$(pwd)/hooks/github/post_deploy"
+fi
+
+if [ -f "$(pwd)/hooks/post_deploy" ]
+then
+    . "$(pwd)/hooks/post_deploy"
 fi
 
 exit $exit_status
