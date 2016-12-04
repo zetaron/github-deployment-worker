@@ -1,5 +1,5 @@
 #!/bin/sh
-set -ex
+set -e
 
 DEPLOYMENT_EVENT="$(cat /var/cache/deployment/deployment-event.json)"
 
@@ -10,7 +10,7 @@ create_status() {
     environment_url="${4}"
     auto_inactive="false"
 
-    DEPLOYMENT_STATUS_URL=$(echo "${DEPLOYMENT_EVENT}" | jq '.deployment.statuses_url')
+    DEPLOYMENT_STATUS_URL=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.statuses_url')
 
     STATUS_JSON=$(jq \
                       -n -c -M \
@@ -30,28 +30,38 @@ create_status() {
          -H "Content-Type: application/json"
 }
 
-SHA=$(echo "${DEPLOYMENT_EVENT}" | jq '.deployment.sha')
-DEPLOYMENT_ENVIRONMENT=$(echo "${DEPLOYMENT_EVENT}" | jq '.deployment.environment')
-DEPLOYMENT_ID=$(echo "${DEPLOYMENT_EVENT}" | jq '.deployment.id')
-REPO_NAME=$(echo "${DEPLOYMENT_EVENT}" | jq '.repository.name')
-REPO_OWNER_LOGIN=$(echo "${DEPLOYMENT_EVENT}" | jq '.repository.owner.login')
-RAW_ARCHIVE_URL=$(echo "${DEPLOYMENT_EVENT}" | jq '.repository.archive_url')
+SHA=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.sha' | tr -d '"')
+DEPLOYMENT_ENVIRONMENT=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.environment' | tr -d '"')
+DEPLOYMENT_ID=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.id' | tr -d '"')
+REPO_NAME=$(echo ${DEPLOYMENT_EVENT} | jq '.repository.name' | tr -d '"')
+REPO_OWNER_LOGIN=$(echo ${DEPLOYMENT_EVENT} | jq '.repository.owner.login' | tr -d '"')
+RAW_ARCHIVE_URL=$(echo ${DEPLOYMENT_EVENT} | jq '.repository.archive_url' | tr -d '"')
 
-ARCHIVE_URL=$(echo "${RAW_ARCHIVE_URL}" | grep 's/{archive_format}/zipball/g' | grep "s/{\/ref}/\/${SHA}/g")
+ARCHIVE_URL=$(echo ${RAW_ARCHIVE_URL} | sed 's/{archive_format}/zipball/g' | sed "s/{\/ref}/\/${SHA}/g" | tr -d '"')
 COMPOSE_PROJECT_NAME="${REPO_NAME}-${DEPLOYMENT_ENVIRONMENT}-deployment-${DEPLOYMENT_ID}"
 
-curl -L "${ARCHIVE_URL}" \
+cd /var/cache/deployment
+
+echo "ARCHIVE_URL: ${ARCHIVE_URL}"
+curl -L ${ARCHIVE_URL} \
+     -o "${SHA}.zip" \
+     -H "Authorization: Bearer ${GITHUB_TOKEN}"
+echo curl -L ${ARCHIVE_URL} \
+     -o "${SHA}.zip" \
      -H "Authorization: Bearer ${GITHUB_TOKEN}"
 
-unzip -d "${SHA}" "${SHA}.zip"
-SHORT_SHA=$(echo "${SHA}" | cut -c1-7)
+ls -lha
+
+unzip "${SHA}.zip"
+
+SHORT_SHA=$(echo ${SHA} | cut -c1-7)
 cd "${REPO_OWNER_LOGIN}-${REPO_NAME}-${SHORT_SHA}"
 
 export DEPLOYMENT_TASK
-DEPLOYMENT_TASK=$(jq '.deployment.task')
+DEPLOYMENT_TASK=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.task')
 
 export DEPLOYMENT_PAYLOAD
-DEPLOYMENT_PAYLOAD=$(jq '.deployment.payload')
+DEPLOYMENT_PAYLOAD=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.payload')
 
 LOG_URL=""
 ENVIRONMENT_URL=""
