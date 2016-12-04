@@ -4,11 +4,11 @@ set -ex
 DEPLOYMENT_EVENT="$(cat /var/cache/deployment/deployment-event.json)"
 
 create_status() {
-    local state="${1}"
-    local log_url="${2}"
-    local description="${3}"
-    local environment_url="${4}"
-    local auto_inactive="false"
+    state="${1}"
+    log_url="${2}"
+    description="${3}"
+    environment_url="${4}"
+    auto_inactive="false"
 
     DEPLOYMENT_STATUS_URL=$(echo "${DEPLOYMENT_EVENT}" | jq '.deployment.statuses_url')
 
@@ -27,7 +27,7 @@ create_status() {
          "${DEPLOYMENT_STATUS_URL}" \
          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
          -H "Accept: application/vnd.github.ant-man-preview+json" \
-         -H "Content-Type: application/json" \
+         -H "Content-Type: application/json"
 }
 
 SHA=$(echo "${DEPLOYMENT_EVENT}" | jq '.deployment.sha')
@@ -47,34 +47,42 @@ unzip -d "${SHA}" "${SHA}.zip"
 SHORT_SHA=$(echo "${SHA}" | cut -c1-7)
 cd "${REPO_OWNER_LOGIN}-${REPO_NAME}-${SHORT_SHA}"
 
-export DEPLOYMENT_TASK=$(jq '.deployment.task')
-export DEPLOYMENT_PAYLOAD=$(jq '.deployment.payload')
+export DEPLOYMENT_TASK
+DEPLOYMENT_TASK=$(jq '.deployment.task')
+
+export DEPLOYMENT_PAYLOAD
+DEPLOYMENT_PAYLOAD=$(jq '.deployment.payload')
 
 LOG_URL=""
 ENVIRONMENT_URL=""
 
 if [ -f "$(pwd)/hooks/github/log_url" ]
 then
+    # shellcheck source=/dev/null
     . "$(pwd)/hooks/github/log_url"
 fi
 
 if [ -f "$(pwd)/hooks/github/environment_url" ]
 then
+    # shellcheck source=/dev/null
     . "$(pwd)/hooks/github/environment_url"
 fi
 
 if [ -f "$(pwd)/hooks/github/pre_deploy" ]
 then
+    # shellcheck source=/dev/null
     . "$(pwd)/hooks/github/pre_deploy"
 fi
 
 if [ -f "$(pwd)/hooks/pre_deploy" ]
 then
+    # shellcheck source=/dev/null
     . "$(pwd)/hooks/pre_deploy"
 fi
 
 if [ -f "$(pwd)/hooks/deploy" ]
 then
+    # shellcheck source=/dev/null
     . "$(pwd)/hooks/deploy"
 else
     create_status "failure" "${LOG_URL}" "You must have a 'hooks/deploy' script."
@@ -86,6 +94,7 @@ docker wait "${COMPOSE_PROJECT_NAME}_deploy"
 exit_status=$?
 
 if [ $exit_status -eq 0 ]
+then
    create_status "success" "${LOG_URL}" "Deployment finished successfully." "${ENVIRONMENT_URL}"
 else
     create_status "failure" "${LOG_URL}" "Deployment failed." "${ENVIRONMENT_URL}"
@@ -93,11 +102,13 @@ fi
 
 if [ -f "$(pwd)/hooks/post_deploy" ]
 then
+    # shellcheck source=/dev/null
     . "$(pwd)/hooks/post_deploy"
 fi
 
 if [ -f "$(pwd)/hooks/github/post_deploy" ]
 then
+    # shellcheck source=/dev/null
     . "$(pwd)/hooks/github/post_deploy"
 fi
 
