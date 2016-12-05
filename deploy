@@ -10,7 +10,7 @@ create_status() {
     environment_url="${4}"
     auto_inactive="false"
 
-    DEPLOYMENT_STATUS_URL=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.statuses_url')
+    DEPLOYMENT_STATUS_URL=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.statuses_url' | tr -d '"')
 
     STATUS_JSON=$(jq \
                       -n -c -M \
@@ -38,30 +38,34 @@ REPO_OWNER_LOGIN=$(echo ${DEPLOYMENT_EVENT} | jq '.repository.owner.login' | tr 
 RAW_ARCHIVE_URL=$(echo ${DEPLOYMENT_EVENT} | jq '.repository.archive_url' | tr -d '"')
 
 ARCHIVE_URL=$(echo ${RAW_ARCHIVE_URL} | sed 's/{archive_format}/zipball/g' | sed "s/{\/ref}/\/${SHA}/g" | tr -d '"')
-COMPOSE_PROJECT_NAME="${REPO_NAME}-${DEPLOYMENT_ENVIRONMENT}-deployment-${DEPLOYMENT_ID}"
 
 cd /var/cache/deployment
 
-echo "ARCHIVE_URL: ${ARCHIVE_URL}"
-curl -L ${ARCHIVE_URL} \
-     -o "${SHA}.zip" \
-     -H "Authorization: Bearer ${GITHUB_TOKEN}"
-echo curl -L ${ARCHIVE_URL} \
-     -o "${SHA}.zip" \
-     -H "Authorization: Bearer ${GITHUB_TOKEN}"
+if [ ! -f "${SHA}.zip" ]
+then
+    echo "ARCHIVE_URL: ${ARCHIVE_URL}"
+    curl -L ${ARCHIVE_URL} \
+         -o "${SHA}.zip" \
+         -H "Authorization: Bearer ${GITHUB_TOKEN}"
+    echo curl -L ${ARCHIVE_URL} \
+         -o "${SHA}.zip" \
+         -H "Authorization: Bearer ${GITHUB_TOKEN}"
+
+    ls -lha
+
+    unzip "${SHA}.zip"
+fi
 
 ls -lha
-
-unzip "${SHA}.zip"
 
 SHORT_SHA=$(echo ${SHA} | cut -c1-7)
 cd "${REPO_OWNER_LOGIN}-${REPO_NAME}-${SHORT_SHA}"
 
 export DEPLOYMENT_TASK
-DEPLOYMENT_TASK=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.task')
+DEPLOYMENT_TASK=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.task' | tr -d '"')
 
 export DEPLOYMENT_PAYLOAD
-DEPLOYMENT_PAYLOAD=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.payload')
+DEPLOYMENT_PAYLOAD=$(echo ${DEPLOYMENT_EVENT} | jq '.deployment.payload' | tr -d '"')
 
 LOG_URL=""
 ENVIRONMENT_URL=""
@@ -78,48 +82,70 @@ then
     . "$(pwd)/hooks/github/environment_url"
 fi
 
+create_status "pending" "${LOG_URL}" "Deployment in progress." ""
+
 if [ -f "$(pwd)/hooks/github/pre_deploy" ]
 then
     # shellcheck source=/dev/null
     . "$(pwd)/hooks/github/pre_deploy"
+
+    if [ $? -ne 0 ]
+    then
+        create_status "failure" "${LOG_URL}" "GitHub Pre Deployment failed." "${ENVIRONMENT_URL}"
+        exit 1
+    fi
 fi
 
 if [ -f "$(pwd)/hooks/pre_deploy" ]
 then
     # shellcheck source=/dev/null
     . "$(pwd)/hooks/pre_deploy"
+
+    if [ $? -ne 0 ]
+    then
+        create_status "failure" "${LOG_URL}" "Pre Deployment failed." "${ENVIRONMENT_URL}"
+        exit 1
+    fi
 fi
 
 if [ -f "$(pwd)/hooks/deploy" ]
 then
     # shellcheck source=/dev/null
     . "$(pwd)/hooks/deploy"
+
+    if [ $? -ne 0 ]
+    then
+        create_status "failure" "${LOG_URL}" "Deployment failed." "${ENVIRONMENT_URL}"
+        exit 1
+    fi
 else
     create_status "failure" "${LOG_URL}" "You must have a 'hooks/deploy' script."
-fi
-
-create_status "pending" "${LOG_URL}" "Deployment in progress." ""
-
-docker wait "${COMPOSE_PROJECT_NAME}_deploy"
-exit_status=$?
-
-if [ $exit_status -eq 0 ]
-then
-   create_status "success" "${LOG_URL}" "Deployment finished successfully." "${ENVIRONMENT_URL}"
-else
-    create_status "failure" "${LOG_URL}" "Deployment failed." "${ENVIRONMENT_URL}"
+    exit 1
 fi
 
 if [ -f "$(pwd)/hooks/post_deploy" ]
 then
     # shellcheck source=/dev/null
     . "$(pwd)/hooks/post_deploy"
+
+    if [ $? -ne 0 ]
+    then
+        create_status "failure" "${LOG_URL}" "Post Deployment failed." "${ENVIRONMENT_URL}"
+        exit 1
+    fi
 fi
 
 if [ -f "$(pwd)/hooks/github/post_deploy" ]
 then
     # shellcheck source=/dev/null
     . "$(pwd)/hooks/github/post_deploy"
+
+    if [ $? -ne 0 ]
+    then
+        create_status "failure" "${LOG_URL}" "GitHub Post Deployment failed." "${ENVIRONMENT_URL}"
+        exit 1
+    fi
 fi
 
-exit $exit_status
+create_status "success" "${LOG_URL}" "Deployment finished successfully." "${ENVIRONMENT_URL}"
+exit 0
