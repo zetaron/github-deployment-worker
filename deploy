@@ -47,11 +47,6 @@ then
     curl -L ${ARCHIVE_URL} \
          -o "${SHA}.zip" \
          -H "Authorization: Bearer ${GITHUB_TOKEN}"
-    echo curl -L ${ARCHIVE_URL} \
-         -o "${SHA}.zip" \
-         -H "Authorization: Bearer ${GITHUB_TOKEN}"
-
-    ls -lha
 
     unzip "${SHA}.zip"
 fi
